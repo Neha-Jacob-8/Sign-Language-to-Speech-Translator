@@ -1,0 +1,26 @@
+cat > .gitignore <<'EOF'
+*
+!.gitignore
+!checkpoints/
+!checkpoints/**
+!frontend/
+!frontend/**
+!reports/
+!reports/**
+!speech/
+!speech/**
+!translator/
+!translator/isl2en_attention.pt
+!imagetraining.py
+!server.py
+!requirements.txt
+!config.json
+dataset/
+uploads/
+persist/
+.env
+secure.env
+*.env
+__pycache__/
+*.pyc
+EOF

@@ -1,0 +1,18 @@
+{
+  "data_dir": "/Users/nehajacob/Desktop/YourFolder/sem5/proj/deep/new/dataset",
+  "img_size": 256,
+  "batch_size": 32,
+  "epochs": 25,
+  "base_lr": 0.001,
+  "weight_decay": 0.0005,
+  "accum_steps": 1,
+  "n_folds": 5,
+  "repeats": 2,
+  "label_smoothing": 0.1,
+  "early_stop_patience": 5,
+  "save_min_val_acc": 0.70,
+  "max_gen_gap": 0.15,
+  "seed": 42,
+  "flip": true,
+  "num_workers": 0
+}

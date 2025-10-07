@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sign → Text (ISL) · Live display</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#ffffff; --ink:#222; --muted:#6b7280;
+    --primary:#2563eb; --primary-ink:#fff; --border:#e5e7eb;
+    --accent:#0ea5e9; --danger:#dc2626; --ok:#15803d;
+  }
+  .dark{
+    --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#9ca3af;
+    --primary:#60a5fa; --primary-ink:#0b1220; --border:#1f2937;
+    --accent:#38bdf8; --danger:#f87171; --ok:#34d399;
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;background:var(--bg);color:var(--ink);}
+
+  header{padding:12px 16px; background:linear-gradient(90deg,#374151,#1f2937,#0ea5e9); color:#fff; position:sticky; top:0; z-index:10;}
+  .header-inner{display:flex;gap:12px;align-items:center;justify-content:flex-start;}
+  .header-inner .spacer{flex:1}
+  header .logo{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#0ea5e9;font-weight:700}
+  header h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+  header button{background:#fff;color:#0e172a;border:0;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+
+  main{max-width:1200px;margin:20px auto;padding:0 16px;display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 8px 0;font-size:16px}
+  .muted{color:var(--muted);font-size:13px}
+
+  .uploader{border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;background:rgba(2,132,199,0.04)}
+  .uploader.drag{background:rgba(2,132,199,0.12);border-color:var(--accent)}
+  .choose{background:var(--primary);color:var(--primary-ink);border:0;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+  .upload-icon{width:56px;height:56px;margin:6px auto 10px;display:block}
+
+  .toolbar{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .btn{border:1px solid var(--border);background:var(--card);color:var(--ink);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+  .btn.ok{background:var(--ok);color:#fff;border-color:transparent}
+  .btn.danger{background:var(--danger);color:#fff;border-color:transparent}
+  .btn.speech{background:var(--accent);color:#fff;border-color:transparent}
+
+  .thumbrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .thumb{position:relative;width:120px;height:80px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#000}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .thumb .x{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:999px;display:grid;place-items:center;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer}
+
+  .gap{user-select:none;border:1px dashed var(--border);padding:6px 10px;border-radius:999px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;background:rgba(2,132,199,0.06)}
+  .gap.on{border-color:var(--accent);background:rgba(2,132,199,0.15)}
+
+  .panel{border:1px dashed var(--border);border-radius:10px;padding:10px;background:transparent}
+  .panel textarea{width:100%;min-height:120px;border:0;outline:0;background:transparent;color:var(--ink);resize:vertical}
+
+  .translator{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--border);margin-top:16px;padding:12px 16px;border-radius:12px}
+  .translator .bar{min-height:56px;border:2px solid var(--primary);border-radius:10px;background:rgba(37,99,235,.07);display:flex;align-items:center;padding:10px 12px;font-size:18px;font-weight:600;letter-spacing:.3px}
+  .hint{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="logo">ISL</div>
+    <h1>Sign Language → Text (Live display)</h1>
+    <div class="spacer"></div>
+    <button id="toggleDark">Toggle Dark</button>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1) Upload images (multiple)</h2>
+    <p class="muted">Set gap toggles to form words. “Recognize” overwrites <code>live.txt</code> and the display shows its translation.</p>
+
+    <div id="drop" class="uploader">
+      <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <path d="M7 10l5-5 5 5"/>
+        <path d="M12 15V5"/>
+      </svg>
+      <div class="muted" style="margin:6px 0;">Drag & Drop images here</div>
+      <div class="muted">or</div>
+      <button class="choose" id="btnChoose">Browse</button>
+      <input id="fileInput" type="file" accept="image/*" multiple style="display:none"/>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn" id="btnClear">Clear all</button>
+      <button class="btn" id="btnShuffle">Shuffle</button>
+      <label class="btn" style="display:flex;align-items:center;gap:8px;">
+        <input id="autoSpace" type="checkbox"/>
+        Auto-space between images
+      </label>
+    </div>
+
+    <div id="thumbRow" class="thumbrow" aria-live="polite"></div>
+  </section>
+
+  <section class="card">
+    <h2>2) Compose</h2>
+    <div class="row" style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="btn ok" id="btnRecognize">Recognize (update live)</button>
+      <button class="btn" id="btnRefreshLive" title="Translate current live.txt">Refresh Live</button>
+      <button class="btn" id="btnSave" title="Archive current live.txt">Save</button>
+    </div>
+
+    <div class="panel" style="margin-bottom:12px">
+      <div class="muted" style="margin-bottom:6px;">Characters recognized (per image)</div>
+      <textarea id="perImageBox" placeholder="One character per line"></textarea>
+    </div>
+
+    <!-- NEW: Audio section below -->
+    <h2>3) Speech Output</h2>
+    <p class="muted">Generate speech from the translated text below.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+      <button class="btn speech" id="btnSpeak">🔊 Generate Speech</button>
+      <audio id="speechPlayer" controls style="flex:1;min-width:240px;"></audio>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="translator card">
+    <div class="muted" style="margin-bottom:6px;">TRANSLATOR (from live.txt)</div>
+    <div id="translatorBar" class="bar" aria-live="polite">Upload images and click Recognize…</div>
+    <div class="hint" id="saveHint"></div>
+  </div>
+</footer>
+
+<script>
+  let files = [];
+  let perImageChars = [];
+  let gapAfter = [];
+  const fileInput=document.getElementById('fileInput');
+  const btnChoose=document.getElementById('btnChoose');
+  const drop=document.getElementById('drop');
+  const thumbRow=document.getElementById('thumbRow');
+  const btnClear=document.getElementById('btnClear');
+  const btnShuffle=document.getElementById('btnShuffle');
+  const autoSpaceEl=document.getElementById('autoSpace');
+  const btnRec=document.getElementById('btnRecognize');
+  const btnRefreshLive=document.getElementById('btnRefreshLive');
+  const btnSave=document.getElementById('btnSave');
+  const perImageBox=document.getElementById('perImageBox');
+  const translatorBar=document.getElementById('translatorBar');
+  const saveHint=document.getElementById('saveHint');
+  const toggleDark=document.getElementById('toggleDark');
+  const btnSpeak=document.getElementById('btnSpeak');
+  const speechPlayer=document.getElementById('speechPlayer');
+
+  function updateBar(text){ translatorBar.textContent = text ?? "Upload images and click Recognize…"; }
+
+  // Dark mode
+  toggleDark.onclick=()=> document.documentElement.classList.toggle('dark');
+
+  // File handling same as before
+  function ensureGapSize(nChars){const need=Math.max(0,nChars-1);if(gapAfter.length>need)gapAfter=gapAfter.slice(0,need);while(gapAfter.length<need)gapAfter.push(false);}
+  function renderThumbs(){
+    thumbRow.innerHTML="";
+    files.forEach((o,idx)=>{
+      const t=document.createElement('div');
+      t.className='thumb';
+      t.innerHTML=`<img src="${o.url}"/><div class="x">✕</div>`;
+      t.querySelector('.x').onclick=()=>{URL.revokeObjectURL(o.url);files.splice(idx,1);if(idx<perImageChars.length){perImageChars.splice(idx,1);ensureGapSize(perImageChars.length);perImageBox.value=perImageChars.join('\n');}renderThumbs();};
+      thumbRow.appendChild(t);
+      if(idx<files.length-1){
+        ensureGapSize(files.length);
+        const g=document.createElement('button');
+        g.type="button";g.className='gap'+(gapAfter[idx]?' on':'');g.innerHTML=gapAfter[idx]?'＋ space (on)':'— no space';
+        g.onclick=()=>{gapAfter[idx]=!gapAfter[idx];g.className='gap'+(gapAfter[idx]?' on':'');g.innerHTML=gapAfter[idx]?'＋ space (on)':'— no space';};
+        thumbRow.appendChild(g);
+      }
+    });
+  }
+  function addFiles(list){Array.from(list||[]).forEach(f=>{if(!f.type.startsWith('image/'))return;files.push({file:f,url:URL.createObjectURL(f)});});ensureGapSize(files.length);renderThumbs();}
+  btnChoose.onclick=()=>fileInput.click();fileInput.onchange=e=>addFiles(e.target.files);
+  ['dragenter','dragover'].forEach(evt=>drop.addEventListener(evt,e=>{e.preventDefault();drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(evt=>drop.addEventListener(evt,e=>{e.preventDefault();drop.classList.remove('drag');}));
+  drop.addEventListener('drop',e=>{const dt=e.dataTransfer;if(dt?.files?.length)addFiles(dt.files);});
+  btnClear.onclick=()=>{files.forEach(f=>URL.revokeObjectURL(f.url));files=[];perImageChars=[];gapAfter=[];perImageBox.value="";renderThumbs();updateBar();saveHint.textContent="";};
+  btnShuffle.onclick=()=>{for(let i=files.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[files[i],files[j]]=[files[j],files[i]];}ensureGapSize(files.length);renderThumbs();};
+
+  async function postRecognize(form){const r=await fetch('/api/recognize_live',{method:'POST',body:form});const data=await r.json();return data;}
+  async function getLatestTranslation(){const r=await fetch('/api/translate_live');return await r.json();}
+
+  btnRec.onclick=async ()=>{
+    if(!files.length){alert("Upload images first");return;}
+    const body=new FormData();
+    files.forEach(o=>body.append('files',o.file));
+    body.append('gaps',JSON.stringify(gapAfter||[]));
+    body.append('auto_space',String(!!autoSpaceEl?.checked));
+    btnRec.disabled=true;btnRec.textContent="Recognizing…";
+    try{
+      const data=await postRecognize(body);
+      if(Array.isArray(data.recognized_chars)){perImageChars=data.recognized_chars;perImageBox.value=perImageChars.join('\n');}
+      const latest=await getLatestTranslation();
+      updateBar(latest.translation||"");
+      if(latest.source_path)saveHint.textContent=`From: ${latest.source_path}`;
+    }catch(err){console.error(err);updateBar("Error");}finally{btnRec.disabled=false;btnRec.textContent="Recognize (update live)";}
+  };
+
+  btnRefreshLive.onclick=async()=>{const data=await getLatestTranslation();updateBar(data.translation||"");if(data.source_path)saveHint.textContent=`From: ${data.source_path}`;};
+  btnSave.onclick=async()=>{const r=await fetch('/api/save_live',{method:'POST'});const data=await r.json();saveHint.textContent=`Saved → ${data.saved_path}`;};
+
+  // ---- NEW: SPEECH BUTTON HANDLER ----
+  btnSpeak.onclick=async ()=>{
+    const text=translatorBar.textContent.trim();
+    if(!text){alert("No text to convert!");return;}
+    try{
+      const r=await fetch('/api/speech',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+      const blob=await r.blob();
+      const url=URL.createObjectURL(blob);
+      speechPlayer.src=url;
+      speechPlayer.play();
+    }catch(e){alert("Speech generation failed");console.error(e);}
+  };
+
+  updateBar();
+</script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+{
+  "classes": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z"
+  ],
+  "dropped_classes": [
+    "0"
+  ],
+  "samples": {
+    "train": 28356,
+    "val": 7012,
+    "test": 6996
+  },
+  "best_epoch": 49,
+  "val_accuracy": 0.9997,
+  "test_accuracy": 0.9997,
+  "test_macro_f1": 0.9997,
+  "split": "blocked by 50 consecutive frames per class, 70/15/15",
+  "hyperparameters": {
+    "data": "data/landmarks.npz",
+    "out": "models/sign_mlp.pt",
+    "reports": "reports/landmark_model",
+    "epochs": 60,
+    "batch_size": 256,
+    "lr": 0.002,
+    "weight_decay": 0.0001,
+    "hidden": [
+      256,
+      256,
+      128
+    ],
+    "dropout": 0.3,
+    "label_smoothing": 0.05,
+    "patience": 12,
+    "rotation": 90.0,
+    "block": 50,
+    "min_samples": 200,
+    "seed": 42
+  },
+  "external": {
+    "Numbers": {
+      "images": 45,
+      "hand_detected": 45,
+      "accuracy": 0.5778,
+      "top3_accuracy": 0.6667,
+      "skipped_classes": [
+        "10"
+      ]
+    }
+  }
+}

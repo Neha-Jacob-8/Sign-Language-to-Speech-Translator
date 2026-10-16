@@ -1,0 +1,74 @@
+{
+ "format": "signspeak-mlp",
+ "feature_version": 1,
+ "activation": "gelu",
+ "classes": [
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "I",
+  "J",
+  "K",
+  "L",
+  "M",
+  "N",
+  "O",
+  "P",
+  "Q",
+  "R",
+  "S",
+  "T",
+  "U",
+  "V",
+  "W",
+  "X",
+  "Y",
+  "Z"
+ ],
+ "metrics": {
+  "val_accuracy": 0.9997,
+  "test_accuracy": 0.9997,
+  "test_macro_f1": 0.9997
+ },
+ "weights": "sign_mlp.bin",
+ "layers": [
+  {
+   "in": 131,
+   "out": 256,
+   "weight_offset": 0,
+   "bias_offset": 33536
+  },
+  {
+   "in": 256,
+   "out": 256,
+   "weight_offset": 33792,
+   "bias_offset": 99328
+  },
+  {
+   "in": 256,
+   "out": 128,
+   "weight_offset": 99584,
+   "bias_offset": 132352
+  },
+  {
+   "in": 128,
+   "out": 35,
+   "weight_offset": 132480,
+   "bias_offset": 136960
+  }
+ ]
+}

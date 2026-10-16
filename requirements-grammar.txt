@@ -1,3 +1,4 @@
 # Optional: T5 grammar correction (set ENABLE_GRAMMAR=1). Downloads a ~900 MB model on first use.
+torch>=2.2
 transformers>=4.40
 sentencepiece>=0.2

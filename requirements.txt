@@ -1,19 +1,7 @@
-# Web app + inference
+# Web app (all that the deployed server needs)
 fastapi>=0.115
 uvicorn[standard]>=0.30
 gunicorn>=22.0
-python-multipart>=0.0.9
 python-dotenv>=1.0
 requests>=2.31
 numpy>=1.26
-pillow>=10.0
-mediapipe>=0.10.20
-torch>=2.2
-
-# Training and evaluation
-scikit-learn>=1.4
-matplotlib>=3.8
-
-# Tests
-pytest>=8.0
-httpx>=0.27

@@ -1,0 +1,9 @@
+# Training, evaluation and tests (on top of the web app requirements)
+-r requirements.txt
+torch>=2.2
+mediapipe>=0.10.20
+pillow>=10.0
+scikit-learn>=1.4
+matplotlib>=3.8
+pytest>=8.0
+httpx>=0.27

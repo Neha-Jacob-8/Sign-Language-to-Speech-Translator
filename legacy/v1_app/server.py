@@ -15,30 +15,23 @@ import torch.nn as nn
 from torchvision import transforms
 
 # ───────────────────────── Paths ─────────────────────────
-import os
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent
-
-# On Azure, APP_ROOT will be /home/site/wwwroot. Locally it falls back to this folder.
-ROOT_DIR = Path(os.getenv("APP_ROOT", str(BASE_DIR)))
-
+ROOT_DIR     = Path("/Users/nehajacob/Desktop/YourFolder/sem5/proj/deep/new")
 FRONTEND_DIR = ROOT_DIR / "frontend"
 CKPT_DIR     = ROOT_DIR / "checkpoints"
 CONFIG_JSON  = ROOT_DIR / "config.json"
-TRANS_CKPT   = ROOT_DIR / "translator" / "isl2en_attention.pt"
+TRANS_CKPT   = Path("/Users/nehajacob/Desktop/YourFolder/sem5/proj/deep/new/translator/isl2en_attention.pt")
 SPEECH_DIR   = ROOT_DIR / "speech"
 
-# Writable, persistent area (Azure: /home/site/data). Local default: ./persist
-PERSIST_DIR = Path(os.getenv("PERSIST_DIR", str(BASE_DIR / "persist")))
-UPLOADS_DIR = PERSIST_DIR / "uploads"
-SAVES_DIR   = UPLOADS_DIR / "text"      # archives (timestamped)
-AUDIO_DIR   = UPLOADS_DIR / "audio"     # generated audio
-LIVE_FILE   = SAVES_DIR / "live.txt"    # always overwritten
-LIVE_META   = SAVES_DIR / "live_meta.json"
+BASE_DIR     = Path(__file__).resolve().parent
+UPLOADS_DIR  = BASE_DIR / "uploads"
+SAVES_DIR    = UPLOADS_DIR / "text"              # archives (timestamped)
+LIVE_FILE    = SAVES_DIR / "live.txt"            # always overwritten
+LIVE_META    = SAVES_DIR / "live_meta.json"      # debug info
+AUDIO_DIR    = UPLOADS_DIR / "audio"             # store generated audio
 
 for p in (UPLOADS_DIR, SAVES_DIR, AUDIO_DIR):
     p.mkdir(parents=True, exist_ok=True)
+
 # ───────────────────────── Device ─────────────────────────
 DEVICE = (
     "cuda" if torch.cuda.is_available()

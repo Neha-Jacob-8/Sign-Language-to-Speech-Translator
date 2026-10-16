@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SignSpeak · ISL to Speech</title>
+  <meta name="description" content="Translate Indian Sign Language fingerspelling into text and speech, live from your camera or from photos.">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    try { const t = localStorage.getItem("signspeak.theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor"/><path d="M11 22v-9.5a1.5 1.5 0 0 1 3 0V17m0-6.5V9a1.5 1.5 0 0 1 3 0v8m0-6.5a1.5 1.5 0 0 1 3 0V17m0-4a1.5 1.5 0 0 1 3 0v5.5a6.5 6.5 0 0 1-6.5 6.5h-.8a6 6 0 0 1-4.6-2.2L8 19.8a1.5 1.5 0 0 1 2.3-1.9L11 19" fill="none" stroke="var(--accent-ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div>
+        <h1>SignSpeak</h1>
+        <p class="tagline">Indian Sign Language → text → speech</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span id="serverStatus" class="status" data-state="loading" role="status"><span class="dot"></span><span class="label">Connecting…</span></span>
+      <button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="card input-card" aria-labelledby="inputTitle">
+      <div class="card-head">
+        <h2 id="inputTitle">Input</h2>
+        <div class="segmented" role="tablist" aria-label="Input mode">
+          <button role="tab" id="tabCamera" aria-controls="panelCamera" aria-selected="true">Live camera</button>
+          <button role="tab" id="tabPhotos" aria-controls="panelPhotos" aria-selected="false" tabindex="-1">Photos</button>
+        </div>
+      </div>
+
+      <div id="panelCamera" role="tabpanel" aria-labelledby="tabCamera">
+        <div class="stage" id="stage">
+          <div class="mirror">
+            <video id="video" playsinline muted></video>
+            <canvas id="overlay"></canvas>
+          </div>
+          <div class="stage-empty" id="stageEmpty">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14M5 18h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2Z"/></svg>
+            <p>Your camera stays on this device. Only hand-joint coordinates are sent to the server.</p>
+            <button id="btnCameraStart" class="btn primary" type="button">Start camera</button>
+          </div>
+          <span class="stage-chip" id="handsChip" hidden>No hands</span>
+        </div>
+        <div class="row between">
+          <p class="hint">Hold a sign steady to type it. Lower your hands for a moment to add a space or to repeat a letter.</p>
+          <button id="btnCameraStop" class="btn" type="button" hidden>Stop camera</button>
+        </div>
+      </div>
+
+      <div id="panelPhotos" role="tabpanel" aria-labelledby="tabPhotos" hidden>
+        <label class="dropzone" id="dropzone">
+          <input id="fileInput" type="file" accept="image/*" multiple hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          <span><strong>Choose photos</strong> or drop them here</span>
+          <span class="hint">One sign per photo, in spelling order (files are sorted by name).</span>
+        </label>
+        <ol class="photo-strip" id="photoStrip" aria-label="Uploaded photos"></ol>
+        <div class="row between wrap" id="photoActions" hidden>
+          <p class="photo-text">Reads: <output id="photoText">–</output></p>
+          <div class="row">
+            <button id="btnPhotosClear" class="btn" type="button">Clear</button>
+            <button id="btnPhotosRecognize" class="btn" type="button">Recognize</button>
+            <button id="btnPhotosUse" class="btn primary" type="button" disabled>Add to message</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="card prediction-card" aria-labelledby="predTitle">
+        <div class="card-head"><h2 id="predTitle">Current sign</h2><span class="hint" id="predHint">Waiting for a hand</span></div>
+        <div class="prediction">
+          <div class="ring" id="holdRing" style="--progress:0">
+            <span class="letter" id="predLetter" aria-live="polite">–</span>
+          </div>
+          <ol class="top-list" id="topList" aria-label="Most likely signs"></ol>
+        </div>
+      </section>
+
+      <section class="card message-card" aria-labelledby="msgTitle">
+        <div class="card-head">
+          <h2 id="msgTitle">Message</h2>
+          <span class="hint" id="voiceLabel">Voice: browser</span>
+        </div>
+        <textarea id="message" rows="4" placeholder="Signed letters appear here. You can also type." aria-label="Message"></textarea>
+        <div class="row wrap tools">
+          <button class="btn" type="button" id="btnSpace" title="Space (Space key)">Space</button>
+          <button class="btn" type="button" id="btnBack" title="Delete last character (Backspace)" aria-label="Delete last character">⌫</button>
+          <button class="btn" type="button" id="btnClear">Clear</button>
+          <span class="spacer"></span>
+          <button class="btn" type="button" id="btnCopy">Copy</button>
+          <button class="btn" type="button" id="btnDownload">Save .txt</button>
+        </div>
+        <div class="row wrap">
+          <button class="btn" type="button" id="btnGrammar" hidden>Fix grammar</button>
+          <button class="btn primary grow" type="button" id="btnSpeak" title="Speak (Enter)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4.5 3.5a5 5 0 0 1 0 7m2.8-9.8a9 9 0 0 1 0 12.6"/></svg>
+            Speak
+          </button>
+        </div>
+        <audio id="audio" hidden></audio>
+      </section>
+
+      <details class="card settings">
+        <summary><h2>Settings</h2></summary>
+        <div class="setting">
+          <label for="holdTime">Hold time <output id="holdTimeOut"></output></label>
+          <input type="range" id="holdTime" min="400" max="2000" step="100">
+        </div>
+        <div class="setting">
+          <label for="minConf">Minimum confidence <output id="minConfOut"></output></label>
+          <input type="range" id="minConf" min="0.4" max="0.95" step="0.05">
+        </div>
+        <label class="switch"><input type="checkbox" id="autoSpace"> Add a space when hands are lowered</label>
+      </details>
+    </div>
+
+    <details class="card guide" open>
+      <summary><h2>Sign guide</h2><span class="hint">Reference handshapes from the training data</span></summary>
+      <ul class="guide-grid" id="guideGrid"></ul>
+    </details>
+  </main>
+
+  <footer class="footer">
+    <span id="modelInfo">Hand-landmark model · ISL signs 1–9 and A–Z</span>
+    <span>22AIE304 Deep Learning · Group A16</span>
+  </footer>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

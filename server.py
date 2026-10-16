@@ -1,4 +1,4 @@
-"""Entry point: `python server.py` (or `uvicorn server:app`, as used by the Azure App Service startup command)."""
+"""Entry point for the optional local server: `python server.py` (or `uvicorn server:app`)."""
 import os
 
 from signspeak.server import app

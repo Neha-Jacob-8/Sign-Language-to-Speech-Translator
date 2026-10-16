@@ -46,7 +46,7 @@
           </div>
           <div class="stage-empty" id="stageEmpty">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14M5 18h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2Z"/></svg>
-            <p>Your camera stays on this device. Only hand-joint coordinates are sent to the server.</p>
+            <p>Recognition runs entirely in your browser. Video never leaves this device.</p>
             <button id="btnCameraStart" class="btn primary" type="button">Start camera</button>
           </div>
           <span class="stage-chip" id="handsChip" hidden>No hands</span>
@@ -62,7 +62,7 @@
           <input id="fileInput" type="file" accept="image/*" multiple hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
           <span><strong>Choose photos</strong> or drop them here</span>
-          <span class="hint">One sign per photo, in spelling order (files are sorted by name).</span>
+          <span class="hint">One sign per photo, in spelling order (sorted by file name). Photos stay on your device.</span>
         </label>
         <ol class="photo-strip" id="photoStrip" aria-label="Uploaded photos"></ol>
         <div class="row between wrap" id="photoActions" hidden>

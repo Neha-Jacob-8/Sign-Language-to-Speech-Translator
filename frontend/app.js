@@ -1,13 +1,15 @@
 // SignSpeak web app: live camera + photo recognition, message composer and speech.
-// Hand tracking runs in the browser with MediaPipe; only the 21 joint coordinates per hand
-// are sent to the server, which classifies them with the trained model.
+// Everything runs in the browser: MediaPipe finds the hand joints and classifier.js runs the
+// trained network on them. The optional Python server adds the Azure voice and grammar correction.
+import { SignModel } from "./classifier.js";
 
 const MP_VERSION = "1.0.1";
 const MP_BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`;
 const MP_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`;
-const HAND_MODEL_URL = "/models/hand_landmarker.task";
+const HAND_MODEL_URL = "models/hand_landmarker.task";
+const SIGN_MODEL_URL = "models/sign_mlp.json";
 
-const PREDICT_INTERVAL_MS = 90;   // max rate of /api/predict/landmarks calls
+const PREDICT_INTERVAL_MS = 90;   // classify at most ~11 times per second
 const AUTO_SPACE_MS = 1400;       // hands lowered this long -> word break
 const SMOOTHING = 0.45;           // weight of the newest prediction in the moving average
 
@@ -33,11 +35,11 @@ const el = {
   guideGrid: $("guideGrid"), modelInfo: $("modelInfo"), toasts: $("toasts"),
 };
 
-const DEFAULT_CLASSES = [..."123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"];
 const state = {
-  health: null,
+  model: null,
+  server: null,  // /api/health of the optional Python server
   settings: { holdMs: 1000, minConf: 0.7, autoSpace: true },
-  cam: { running: false, stream: null, landmarker: null, mp: null, drawer: null, raf: 0, lastVideoTime: -1, inFlight: false, lastSent: 0 },
+  cam: { running: false, stream: null, landmarker: null, mp: null, drawer: null, raf: 0, lastVideoTime: -1, lastSent: 0 },
   live: { ema: new Map(), candidate: null, since: 0, locked: null, lastHandAt: 0, typedSinceSpace: false, showing: false },
   photos: [],
   nextPhotoId: 1,
@@ -51,7 +53,7 @@ const storage = {
 };
 
 async function api(path, options = {}) {
-  const res = await fetch(path, options);
+  const res = await fetch(path, options);  // relative paths, so the app also works under a sub-path
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
     try { const body = await res.json(); if (body.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail); } catch {}
@@ -87,21 +89,34 @@ const pct = (p) => `${Math.round(p * 100)}%`;
 
 // ── Server status ───────────────────────────────────────────────────────────
 
-async function loadHealth() {
+async function loadModel() {
   try {
-    const health = await (await api("/api/health")).json();
-    state.health = health;
+    state.model = await SignModel.load(SIGN_MODEL_URL);
+    const classes = state.model.classes;
     el.status.dataset.state = "ok";
-    el.status.querySelector(".label").textContent = `Model ready · ${health.classes.length} signs`;
-    el.btnGrammar.hidden = !health.features.grammar;
-    el.voiceLabel.textContent = health.features.azure_tts ? "Voice: Azure neural (en-IN)" : "Voice: browser";
-    const m = health.metrics || {};
-    if (m.test_accuracy) el.modelInfo.textContent = `Hand-landmark model · ${health.classes.length} ISL signs · ${(m.test_accuracy * 100).toFixed(2)}% on held-out dataset frames`;
-    renderGuide(health.classes);
-  } catch {
+    el.status.querySelector(".label").textContent = `Model ready · ${classes.length} signs`;
+    const m = state.model.metrics;
+    if (m.test_accuracy) el.modelInfo.textContent = `Hand-landmark model · ${classes.length} ISL signs · ${(m.test_accuracy * 100).toFixed(2)}% on held-out dataset frames`;
+    renderGuide(classes);
+  } catch (err) {
+    console.error(err);
     el.status.dataset.state = "error";
-    el.status.querySelector(".label").textContent = "Server offline";
-    renderGuide(DEFAULT_CLASSES);
+    el.status.querySelector(".label").textContent = "Model failed to load";
+    el.btnCameraStart.disabled = true;
+    el.btnPhotosRecognize.disabled = true;
+  }
+}
+
+// The Python server is optional: when it runs, it can offer the Azure voice and grammar correction.
+async function detectServer() {
+  try {
+    const health = await (await api("api/health")).json();
+    if (health.status !== "ok") return;
+    state.server = health;
+    el.btnGrammar.hidden = !health.features.grammar;
+    if (health.features.azure_tts) el.voiceLabel.textContent = "Voice: Azure neural (en-IN)";
+  } catch {
+    // static hosting (e.g. GitHub Pages): browser voice, no grammar correction
   }
 }
 
@@ -138,29 +153,42 @@ el.themeToggle.onclick = () => {
 
 // ── Live camera ─────────────────────────────────────────────────────────────
 
-async function createLandmarker() {
-  const mp = await import(MP_BUNDLE);
-  const fileset = await mp.FilesetResolver.forVisionTasks(MP_WASM);
+// MediaPipe is loaded once and shared by the camera (VIDEO mode) and photo (IMAGE mode) detectors.
+let visionPromise = null;
+function loadVision() {
+  visionPromise ??= (async () => {
+    const mp = await import(MP_BUNDLE);
+    const fileset = await mp.FilesetResolver.forVisionTasks(MP_WASM);
+    return { mp, fileset };
+  })().catch((err) => { visionPromise = null; throw err; });
+  return visionPromise;
+}
+
+async function createLandmarker(runningMode) {
+  const { mp, fileset } = await loadVision();
   const options = (delegate) => ({
     baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate },
-    runningMode: "VIDEO",
+    runningMode,
     numHands: 2,
-    minHandDetectionConfidence: 0.5,
-    minHandPresenceConfidence: 0.5,
+    minHandDetectionConfidence: runningMode === "IMAGE" ? 0.3 : 0.5,
+    minHandPresenceConfidence: runningMode === "IMAGE" ? 0.3 : 0.5,
     minTrackingConfidence: 0.5,
   });
-  let landmarker;
   try {
-    landmarker = await mp.HandLandmarker.createFromOptions(fileset, options("GPU"));
+    return await mp.HandLandmarker.createFromOptions(fileset, options("GPU"));
   } catch {
-    landmarker = await mp.HandLandmarker.createFromOptions(fileset, options("CPU"));
+    return await mp.HandLandmarker.createFromOptions(fileset, options("CPU"));
   }
+}
+
+async function createVideoLandmarker() {
+  const landmarker = await createLandmarker("VIDEO");
   // Run once on a blank frame so shader compilation happens now, not on the user's first sign.
   const warmup = document.createElement("canvas");
   warmup.width = warmup.height = 64;
   warmup.getContext("2d").fillRect(0, 0, 64, 64);
   landmarker.detectForVideo(warmup, performance.now());
-  state.cam.mp = mp;
+  state.cam.mp = (await loadVision()).mp;
   return landmarker;
 }
 
@@ -180,7 +208,7 @@ async function startCamera() {
   el.btnCameraStart.textContent = "Loading hand tracker…";
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error("Camera API not available"), { name: "NotSupported" });
-    if (!cam.landmarker) cam.landmarker = await createLandmarker();
+    if (!cam.landmarker) cam.landmarker = await createVideoLandmarker();
     cam.stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false,
     });
@@ -252,22 +280,10 @@ function onFrame(hands) {
     return;
   }
   live.lastHandAt = now;
-  if (cam.inFlight || now - cam.lastSent < PREDICT_INTERVAL_MS) return;
-  cam.inFlight = true;
+  if (!state.model || now - cam.lastSent < PREDICT_INTERVAL_MS) return;
   cam.lastSent = now;
-  postJSON("/api/predict/landmarks", {
-    hands: hands.map((h) => h.map((p) => [p.x, p.y, p.z])),
-    width: el.video.videoWidth,
-    height: el.video.videoHeight,
-    top_k: 5,
-  })
-    .then((r) => r.json())
-    .then((pred) => {
-      // Ignore answers that arrive after the hands have left the frame.
-      if (cam.running && performance.now() - live.lastHandAt < 250) onPrediction(pred, performance.now());
-    })
-    .catch(() => {})
-    .finally(() => { cam.inFlight = false; });
+  const pred = state.model.predict(hands.map((h) => h.map((p) => [p.x, p.y, p.z])), el.video.videoWidth, el.video.videoHeight, 5);
+  onPrediction(pred, now);
 }
 
 function onPrediction(pred, now) {
@@ -393,7 +409,7 @@ el.btnGrammar.onclick = async () => {
   if (!text) return toast("Nothing to correct yet");
   setBusy(el.btnGrammar, true);
   try {
-    const out = await (await postJSON("/api/grammar", { text })).json();
+    const out = await (await postJSON("api/grammar", { text })).json();
     if (out.text && out.text !== text) {
       undoText = el.message.value;
       el.message.value = out.text;
@@ -412,10 +428,10 @@ el.btnSpeak.onclick = speak;
 async function speak() {
   const text = el.message.value.trim();
   if (!text) return toast("Sign or type something to speak");
-  if (state.health?.features.azure_tts && !state.azureFailed) {
+  if (state.server?.features.azure_tts && !state.azureFailed) {
     setBusy(el.btnSpeak, true);
     try {
-      const blob = await (await postJSON("/api/speak", { text })).blob();
+      const blob = await (await postJSON("api/speak", { text })).blob();
       if (el.audio.src) URL.revokeObjectURL(el.audio.src);
       el.audio.src = URL.createObjectURL(blob);
       await el.audio.play();
@@ -558,17 +574,53 @@ function renderPhotos() {
   el.btnPhotosUse.disabled = !anyDone;
 }
 
+const PHOTO_MAX_SIDE = 1280;  // large phone photos are scaled down before detection
+
+let imageLandmarker = null;
+
+async function detectPhoto(file) {
+  // createImageBitmap applies the EXIF orientation, so sideways-stored phone photos come out upright.
+  let bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  if (scale < 1) {
+    const { width, height } = bitmap;
+    bitmap.close();
+    bitmap = await createImageBitmap(file, {
+      imageOrientation: "from-image", resizeWidth: Math.round(width * scale), resizeHeight: Math.round(height * scale), resizeQuality: "high",
+    });
+  }
+  try {
+    const result = imageLandmarker.detect(bitmap);
+    return { hands: result.landmarks.map((h) => h.map((p) => [p.x, p.y, p.z])), width: bitmap.width, height: bitmap.height };
+  } finally {
+    bitmap.close();
+  }
+}
+
 async function recognizePhotos() {
+  if (!state.model) return toast("The model is still loading, try again in a moment");
   setBusy(el.btnPhotosRecognize, true);
+  try {
+    imageLandmarker ??= await createLandmarker("IMAGE");
+  } catch (err) {
+    console.error(err);
+    setBusy(el.btnPhotosRecognize, false);
+    return toast("Could not load the hand tracker. Check your internet connection and try again.", { kind: "error", timeout: 6000 });
+  }
   for (const photo of state.photos) {
     if (photo.status === "done" || photo.status === "nohand") continue;
     photo.status = "working";
     renderPhotos();
-    const form = new FormData();
-    form.append("file", photo.file);
     try {
-      photo.result = await (await api("/api/predict/image", { method: "POST", body: form })).json();
-      photo.status = photo.result.label ? "done" : "nohand";
+      const { hands, width, height } = await detectPhoto(photo.file);
+      if (!hands.length) {
+        photo.result = { label: null, landmarks: [] };
+        photo.status = "nohand";
+      } else {
+        const pred = state.model.predict(hands, width, height, 3);
+        photo.result = { ...pred, landmarks: hands };
+        photo.status = "done";
+      }
     } catch (err) {
       photo.status = "error";
       photo.error = err.message;
@@ -643,4 +695,5 @@ applySettings();
 el.btnCameraStart.onclick = startCamera;
 el.btnCameraStop.onclick = stopCamera;
 renderPrediction(null);
-loadHealth();
+loadModel();
+detectServer();

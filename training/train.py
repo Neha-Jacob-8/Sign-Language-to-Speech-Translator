@@ -25,7 +25,7 @@ import torch.nn as nn
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
 from signspeak.features import augment, featurize
-from signspeak.model import LandmarkMLP, save_checkpoint
+from signspeak.model import LandmarkMLP, export_inference, save_checkpoint
 
 
 def blocked_split(labels: np.ndarray, paths: np.ndarray, block: int, seed: int, val_frac: float, test_frac: float):
@@ -110,6 +110,7 @@ def main() -> None:
     ap.add_argument("--min-samples", type=int, default=200, help="drop classes with fewer usable samples")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--external", type=Path, nargs="*", default=[], help="labelled image folders for end-to-end testing")
+    ap.add_argument("--hand-model", type=Path, default=Path("models/hand_landmarker.task"))
     args = ap.parse_args()
 
     random.seed(args.seed)
@@ -192,28 +193,33 @@ def main() -> None:
         "test_accuracy": round(test_acc, 4),
         "test_macro_f1": round(test_f1, 4),
         "split": f"blocked by {args.block} consecutive frames per class, 70/15/15",
-        "hyperparameters": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items() if k != "external"},
+        "hyperparameters": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items() if k not in ("external", "hand_model")},
     }
+
+    summary = {k: metrics[k] for k in ("val_accuracy", "test_accuracy", "test_macro_f1")}
+    save_checkpoint(args.out, model, classes, args.hidden, args.dropout, summary)
+    export_inference(model, classes, args.out.with_suffix(".json"), summary)  # what the app loads
 
     if args.external:
         from training.evaluate import evaluate_folder
-        from signspeak.recognizer import SignRecognizer
+        from signspeak.classifier import SignClassifier
+        from signspeak.landmarks import HandDetector
 
-        recognizer = SignRecognizer.from_model(model, classes)
+        classifier = SignClassifier.load(args.out.with_suffix(".json"))
+        detector = HandDetector(args.hand_model)
         metrics["external"] = {}
         for folder in args.external:
-            result = evaluate_folder(recognizer, folder)
+            result = evaluate_folder(classifier, detector, folder)
             metrics["external"][str(folder)] = result["summary"]
+        detector.close()
 
-    save_checkpoint(args.out, model, classes, args.hidden, args.dropout,
-                    {k: metrics[k] for k in ("val_accuracy", "test_accuracy", "test_macro_f1")})
     args.reports.mkdir(parents=True, exist_ok=True)
     report = classification_report(y[te], y_pred, labels=range(len(classes)), target_names=classes, output_dict=True, zero_division=0)
     (args.reports / "metrics.json").write_text(json.dumps(metrics, indent=2))
     (args.reports / "classification_report.json").write_text(json.dumps(report, indent=2))
     (args.reports / "history.json").write_text(json.dumps(history, indent=2))
     save_plots(history, cm, classes, args.reports)
-    print(f"Saved model to {args.out} and reports to {args.reports}/")
+    print(f"Saved {args.out}, {args.out.with_suffix('.json')} (+ .bin) and reports to {args.reports}/")
 
 
 if __name__ == "__main__":

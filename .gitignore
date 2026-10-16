@@ -12,19 +12,8 @@ venv/
 
 # Datasets and generated data (large; see README for how to get them)
 /Indian/
-/Indian.zip
-/dataset/
-/test/
-/one_from_each/
 /Numbers/
 /data/
-.uniq_hashes_dataset.json
-
-# Runtime output from the v1 app
-/uploads/
-/persist/
-/output.wav
-/speech/
 
 # OS / editor
 .DS_Store

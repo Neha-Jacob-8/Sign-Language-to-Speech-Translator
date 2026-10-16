@@ -1,0 +1,56 @@
+name: Test and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install requirements
+        run: pip install -r requirements.txt pytest httpx
+      - name: Run tests (Python + browser classifier)
+        run: pytest
+
+  deploy:
+    # Publish the web app to GitHub Pages. Everything runs in the browser, so no server is needed.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir -p _site/models _site/api
+          cp -R frontend/. _site/
+          cp models/hand_landmarker.task models/sign_mlp.json models/sign_mlp.bin _site/models/
+          # No Python server on Pages; this tells the app to use the browser voice.
+          echo '{"status": "static"}' > _site/api/health
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
